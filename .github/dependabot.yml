@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+    assignees:
+      - "DilicalFlame"
+
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
