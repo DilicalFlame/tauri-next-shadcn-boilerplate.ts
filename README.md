@@ -29,11 +29,6 @@ A professional, production-ready boilerplate for building modern cross-platform 
 - [Scripts](#-scripts)
 - [Configuration](#-configuration)
 - [Adding Components](#-adding-components)
-- [Code Quality](#-code-quality)
-- [Dependency Management](#-dependency-management)
-- [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
-- [License](#-license)
 
 ---
 
