@@ -17,11 +17,15 @@
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"noFallthroughCasesInSwitch": true,
-		"baseUrl": "./",
 		"paths": {
 			"@/*": ["./"],
-			"@/styles/*": ["styles/*"],
-			"@/components/*": ["components/*"]
+			"@/styles/*": ["./styles/*"],
+			"@/components/*": ["./components/*"],
+			"@shadcn/*": ["./components/ui/*"],
+			"@/lib/*": ["./lib/*"],
+			"@/hooks/*": ["./hooks/*"],
+			"@/types/*": ["./types/*"],
+			"@/constants/*": ["./constants/*"]
 		},
 		"allowJs": true,
 		"incremental": true,
@@ -32,6 +36,19 @@
 			}
 		]
 	},
-	"include": ["src", ".next\\dev/types/**/*.ts", ".next\\dev/types/**/*.ts"],
+	"include": [
+		".next\\dev/types/**/*.ts",
+		".next\\dev/types/**/*.ts",
+		".next/types/**/*.ts",
+		".next/dev/types/**/*.ts",
+		"out/types/**/*.ts",
+		"out/dev/types/**/*.ts",
+		"types/**/*.ts",
+		"lib/**/*.ts",
+		"hooks/**/*.ts",
+		"components/**/*.ts",
+		"styles/**/*.ts",
+		"constants/**/*.ts"
+	],
 	"exclude": ["node_modules"]
 }
