@@ -1,7 +1,8 @@
+import { WindowStateManager } from "./WindowStateManager";
 import { TauriService } from "./TauriService";
 import { emit } from "@tauri-apps/api/event";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
+import { WebviewWindow, getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWindow, PhysicalPosition, PhysicalSize, LogicalPosition, LogicalSize, Window } from "@tauri-apps/api/window";
 
 export interface WindowConfig {
     url?: string;
@@ -15,6 +16,11 @@ export interface WindowConfig {
     skipTaskbar?: boolean;
     center?: boolean;
     minimizable?: boolean;
+    x?: number;
+    y?: number;
+    maximized?: boolean;
+    label?: string;
+    category?: string; // New field for window category
 }
 
 export class WindowManager {
@@ -26,10 +32,88 @@ export class WindowManager {
     private isFocusListenerActive = false;
     private focusGracePeriod = false;
     private isClosing = false;
+    private currentScope = 'main'; // Default scope for now
 
     private constructor() {
         // Private constructor for Singleton
         this.setupMainWindowListener();
+        this.initialize();
+    }
+
+    public async initialize() {
+        const currentWindow = getCurrentWindow();
+        try {
+            const stateManager = WindowStateManager.getInstance();
+            await stateManager.loadState();
+            
+            if (currentWindow.label === 'main') {
+                await this.restoreMainWindow(currentWindow, stateManager);
+            }
+        } catch (e) {
+            console.error('WindowManager initialization failed:', e);
+        } finally {
+            if (currentWindow.label === 'main') {
+                await currentWindow.show();
+                await currentWindow.setFocus();
+            }
+        }
+    }
+
+    private async restoreMainWindow(currentWindow: Window, stateManager: WindowStateManager) {
+        const mainState = stateManager.getWindow(this.currentScope, 'main');
+        if (mainState) {
+            try {
+                await currentWindow.setPosition(new LogicalPosition(mainState.x, mainState.y));
+                await currentWindow.setSize(new LogicalSize(mainState.width, mainState.height));
+                if (mainState.maximized) {
+                    await currentWindow.maximize();
+                }
+            } catch (e) {
+                console.error('Failed to restore main window state:', e);
+            }
+        }
+        
+        stateManager.trackWindow(currentWindow, this.currentScope, '/', 'main', 'main-window');
+        
+        const allWindows = stateManager.getWindows(this.currentScope);
+        const restoredLabels: string[] = ['main'];
+        let childRestored = false;
+
+        for (const winState of allWindows) {
+            if (winState.label === 'main') continue;
+            
+            let restored = false;
+            if (winState.type === 'aux') {
+                await this.openAuxiliaryWindow(winState.url, {
+                    label: winState.label,
+                    x: winState.x,
+                    y: winState.y,
+                    width: winState.width,
+                    height: winState.height,
+                    maximized: winState.maximized,
+                    category: winState.category
+                });
+                restored = true;
+            } else if (winState.type === 'child' && !childRestored) {
+                childRestored = true;
+                await this.openChildWindow(winState.url, {
+                    label: winState.label,
+                    x: winState.x,
+                    y: winState.y,
+                    width: winState.width,
+                    height: winState.height,
+                    maximized: winState.maximized,
+                    category: winState.category
+                });
+                restored = true;
+            }
+            
+            if (restored) {
+                restoredLabels.push(winState.label);
+            }
+        }
+        
+        stateManager.pruneScope(this.currentScope, restoredLabels);
     }
 
     private async setupMainWindowListener() {
@@ -44,8 +128,11 @@ export class WindowManager {
                 event.preventDefault();
 
                 try {
-                    const closePromises = this.auxiliaryWindows.map((win) =>
-                        win.destroy().catch((e) => console.error(`Failed to destroy aux window ${win.label}:`, e))
+                    const allWindows = await getAllWebviewWindows();
+                    const windowsToClose = allWindows.filter(w => w.label !== 'main');
+                    
+                    const closePromises = windowsToClose.map((win) =>
+                        win.destroy().catch((e) => console.error(`Failed to destroy window ${win.label}:`, e))
                     );
                     await Promise.all(closePromises);
                 } finally {
@@ -152,8 +239,26 @@ export class WindowManager {
         });
     }
 
+    private mergeWindowConfig(options: Partial<WindowConfig> | undefined, defaultOptions: WindowConfig): WindowConfig {
+        let presetConfig: Partial<WindowConfig> = {};
+        if (options?.category) {
+            const preset = WindowStateManager.getInstance().getPreset(options.category);
+            if (preset) {
+                presetConfig = {
+                    width: preset.width,
+                    height: preset.height,
+                    x: preset.x,
+                    y: preset.y,
+                    maximized: preset.maximized
+                };
+            }
+        }
+        return { ...defaultOptions, ...presetConfig, ...options };
+    }
+
     public async openAuxiliaryWindow(path: string = "/", options?: Partial<WindowConfig>): Promise<void> {
-        const label = `aux-${Date.now()}`;
+        const label = options?.label || `aux-${Date.now()}`;
+        
         const defaultOptions: WindowConfig = {
             url: path,
             title: "Auxiliary Window",
@@ -164,23 +269,36 @@ export class WindowManager {
             visible: false,
         };
 
-        const config = { ...defaultOptions, ...options };
+        const fullConfig = this.mergeWindowConfig(options, defaultOptions);
+        
+        // Extract properties that are not part of WindowOptions to avoid errors
+        // @ts-ignore - category is not in WindowOptions
+        const { category, ...windowOptions } = fullConfig;
 
-        const webview = new WebviewWindow(label, config);
+        const webview = new WebviewWindow(label, windowOptions);
         this.auxiliaryWindows.push(webview);
 
-        webview.once("tauri://created", () => {
+        webview.once("tauri://created", async () => {
             console.log(`Auxiliary window ${label} created`);
+            
+            if (fullConfig.maximized) {
+                await webview.maximize();
+            }
+
             webview.show();
+            WindowStateManager.getInstance().trackWindow(webview, this.currentScope, path, 'aux', category);
         });
 
         webview.once("tauri://error", (e) => {
-            console.error(`Failed to create auxiliary window ${label}:`, e);
+            console.error(`Failed to create auxiliary window ${label}:`, JSON.stringify(e));
             this.removeAuxiliaryWindow(webview);
         });
 
         webview.once("tauri://destroyed", () => {
             this.removeAuxiliaryWindow(webview);
+            if (!this.isClosing) {
+                WindowStateManager.getInstance().removeWindow(this.currentScope, label);
+            }
         });
     }
 
@@ -202,7 +320,8 @@ export class WindowManager {
         }
 
         // 2. Create the new child
-        const label = `child-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const label = options?.label || `child-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        
         const defaultOptions: WindowConfig = {
             url: path,
             title: "Child Window",
@@ -216,9 +335,18 @@ export class WindowManager {
             visible: false,
         };
 
-        const config = { ...defaultOptions, ...options };
+        const fullConfig = this.mergeWindowConfig(options, defaultOptions);
+        
+        // If we are restoring position (from options or preset), disable centering
+        if (fullConfig.x !== undefined && fullConfig.y !== undefined) {
+            fullConfig.center = false;
+        }
 
-        const webview = new WebviewWindow(label, config);
+        // Extract properties that are not part of WindowOptions
+        // @ts-ignore - category is not in WindowOptions
+        const { category, ...windowOptions } = fullConfig;
+
+        const webview = new WebviewWindow(label, windowOptions);
 
         // 3. Add to stack and setup listener
         this.activeChildren.push(webview);
@@ -226,16 +354,27 @@ export class WindowManager {
         this.setUiLock(true);
 
         // 4. Handle Lifecycle
-        webview.once("tauri://created", () => {
+        webview.once("tauri://created", async () => {
             console.log(`Child window ${label} created`);
+            
+            if (fullConfig.maximized) {
+                await webview.maximize();
+            }
+
             webview.show();
             webview.setFocus();
+            WindowStateManager.getInstance().trackWindow(webview, this.currentScope, path, 'child', category);
         });
 
         const cleanup = () => {
             const index = this.activeChildren.indexOf(webview);
             if (index > -1) {
                 this.activeChildren.splice(index, 1);
+            }
+
+            // Remove from state manager when closed
+            if (!this.isClosing) {
+                WindowStateManager.getInstance().removeWindow(this.currentScope, label);
             }
 
             if (this.activeChildren.length === 0) {
@@ -255,7 +394,7 @@ export class WindowManager {
         };
 
         webview.once("tauri://error", (e) => {
-            console.error(`Failed to create child window ${label}:`, e);
+            console.error(`Failed to create child window ${label}:`, JSON.stringify(e));
             cleanup();
         });
 

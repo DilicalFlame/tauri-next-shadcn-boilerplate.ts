@@ -42,40 +42,27 @@ class LoggerService {
     // Development Mode (or Prod fallback): Try to resolve source location
     if (this.isDev) {
       try {
-        // Get the stack trace
         const stackframes = await StackTrace.get();
-        // 0: getCallerLocation
-        // 1: log method (info, warn, etc)
-        // 2: public method (info, warn, etc)
-        // 3: caller
+        // 0: getCallerLocation, 1: log method, 2: public method, 3: caller
         const callerFrame = stackframes[3];
         
         if (callerFrame) {
           let fileName = callerFrame.fileName || 'unknown';
           
-          // Clean up common Next.js/Webpack prefixes to get a relative path
-          // Example: webpack-internal:///./app/page.tsx -> app/page.tsx
+          // Clean up common Next.js/Webpack prefixes
           fileName = fileName
             .replace(/^webpack-internal:\/\/\/\.\//, '')
             .replace(/^webpack-internal:\/\/\//, '')
             .replace(/^file:\/\//, '');
 
-          // If it's a URL, try to extract the meaningful path
           if (fileName.startsWith('http')) {
              try {
                 const path = new URL(fileName).pathname;
-                // Remove Next.js internal paths
                 fileName = path.replace(/^\/_next\/static\/chunks\//, '');
              } catch {}
           }
 
-          // Remove absolute path prefix if present (Windows/Unix)
-          // This makes the path relative to the project root if the absolute path contains the project structure
-          // We can't know the exact project root at runtime in the browser easily, 
-          // but we can try to strip common prefixes or just keep the last few segments if it's too long.
-          // However, for the specific case seen in logs: "/D:/Playground/.../app/page.tsx"
-          
-          // Try to find "app/" or "src/" or "components/" or "lib/" and keep everything after
+          // Try to find project root relative path
           const match = fileName.match(/.*[\/\\]((?:app|src|components|lib|hooks|constants|types)[\/\\].*)/);
           if (match && match[1]) {
             fileName = match[1];
@@ -89,7 +76,6 @@ class LoggerService {
       }
     }
 
-    // Fallback for Prod without context, or if stacktrace fails
     return context || 'unknown';
   }
 

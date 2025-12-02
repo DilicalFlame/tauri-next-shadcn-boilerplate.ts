@@ -14,6 +14,9 @@ export default function Home() {
 	const isLocked = useWindowLock();
 
 	useEffect(() => {
+		// Initialize WindowManager to restore windows
+		WindowManager.getInstance();
+
 		TauriService.getInstance()
 			.greet("World")
 			.then(setGreeting)
@@ -21,13 +24,19 @@ export default function Home() {
 	}, []);
 
 	const handleOpenAuxiliary = () => {
-		WindowManager.getInstance().openAuxiliaryWindow();
-		Logger.info("Opened auxiliary window", "HomePage");
+		WindowManager.getInstance().openAuxiliaryWindow("/", {
+			title: "Settings",
+			category: "settings"
+		});
+		Logger.info("Opened settings window", "HomePage");
 	};
 
 	const handleOpenChild = () => {
-		WindowManager.getInstance().openChildWindow();
-		Logger.info("Opened child window", "HomePage");
+		WindowManager.getInstance().openChildWindow("/", {
+			title: "Dialog",
+			category: "dialog"
+		});
+		Logger.info("Opened dialog window", "HomePage");
 	};
 
 	return (
@@ -49,16 +58,16 @@ export default function Home() {
 			</h1>
 			<p className="text-muted-foreground text-center max-w-md">
 				<br />
-				Click below to spawn different window types.
+				Click below to spawn different window types with persistent states.
 			</p>
 
 			<div className="flex flex-col sm:flex-row gap-4">
 				<Button size="lg" onClick={handleOpenAuxiliary}>
-					Open Auxiliary Window
+					Open Settings (Aux)
 				</Button>
 
 				<Button size="lg" variant="secondary" onClick={handleOpenChild}>
-					Open Child Window
+					Open Dialog (Child)
 				</Button>
 			</div>
 		</main>
