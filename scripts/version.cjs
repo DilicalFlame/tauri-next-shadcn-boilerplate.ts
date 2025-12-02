@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const [, , rawCommand] = process.argv;
 const command = rawCommand ? rawCommand.toLowerCase() : null;
@@ -17,7 +17,7 @@ const paths = {
 	packageJson: path.join(rootDir, "package.json"),
 	taoriConf: path.join(rootDir, "src-tauri", "tauri.conf.json"),
 	cargoToml: path.join(rootDir, "src-tauri", "Cargo.toml"),
-	versions: path.join(rootDir, "constants", ".versions")
+	versions: path.join(rootDir, "constants", ".versions"),
 };
 
 const updatedFiles = [];
@@ -147,7 +147,9 @@ function handlePeek(history) {
 
 function handlePop(history) {
 	if (history.length <= 1) {
-		console.warn("Cannot pop version: only one entry exists in constants/.versions");
+		console.warn(
+			"Cannot pop version: only one entry exists in constants/.versions",
+		);
 		process.exit(1);
 	}
 	const previousVersion = history[history.length - 2];
@@ -185,7 +187,9 @@ try {
 
 	if (updatedFiles.length) {
 		console.log("Updated files:");
-		updatedFiles.forEach((file) => console.log(`- ${file}`));
+		updatedFiles.forEach((file) => {
+			console.log(`- ${file}`);
+		});
 	}
 } catch (error) {
 	console.error(error.message);

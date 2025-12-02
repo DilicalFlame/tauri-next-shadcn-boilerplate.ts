@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const [, , developerNameInput, appNameInput] = process.argv;
 
@@ -30,14 +30,16 @@ const paths = {
 	taoriConf: path.join(rootDir, "src-tauri", "tauri.conf.json"),
 	cargoToml: path.join(rootDir, "src-tauri", "Cargo.toml"),
 	cargoLock: path.join(rootDir, "src-tauri", "Cargo.lock"),
-	mainRs: path.join(rootDir, "src-tauri", "src", "main.rs")
+	mainRs: path.join(rootDir, "src-tauri", "src", "main.rs"),
 };
 
 const updatedFiles = [];
 
 function ensureFileExists(filePath) {
 	if (!fs.existsSync(filePath)) {
-		throw new Error(`Expected file not found: ${path.relative(rootDir, filePath)}`);
+		throw new Error(
+			`Expected file not found: ${path.relative(rootDir, filePath)}`,
+		);
 	}
 }
 
@@ -93,7 +95,10 @@ function rewriteCargoToml(rawContent, nextAppName, nextAuthor) {
 		if (currentSection === "package" && trimmed.startsWith("authors")) {
 			authorReplaced = true;
 			const serializedAuthor = escapeTomlString(nextAuthor);
-			return line.replace(/authors\s*=\s*\[.*]/, `authors = ["${serializedAuthor}"]`);
+			return line.replace(
+				/authors\s*=\s*\[.*]/,
+				`authors = ["${serializedAuthor}"]`,
+			);
 		}
 
 		if (currentSection === "lib" && trimmed.startsWith("name")) {
@@ -115,7 +120,11 @@ function rewriteCargoToml(rawContent, nextAppName, nextAuthor) {
 	}
 
 	const normalized = rewritten.join("\n");
-	return { content: normalized.endsWith("\n") ? normalized : `${normalized}\n`, packageName, libName };
+	return {
+		content: normalized.endsWith("\n") ? normalized : `${normalized}\n`,
+		packageName,
+		libName,
+	};
 }
 
 function updateCargoLock(rawContent, oldName, nextName) {
@@ -156,7 +165,7 @@ try {
 	const cargoResult = rewriteCargoToml(
 		fs.readFileSync(paths.cargoToml, "utf8"),
 		appName,
-		developerName
+		developerName,
 	);
 	writeFile(paths.cargoToml, cargoResult.content);
 
@@ -181,7 +190,7 @@ try {
 		if (conf.app && Array.isArray(conf.app.windows)) {
 			conf.app.windows = conf.app.windows.map((window) => ({
 				...window,
-				title: appName
+				title: appName,
 			}));
 		}
 		return conf;
@@ -189,14 +198,25 @@ try {
 
 	if (fs.existsSync(paths.cargoLock)) {
 		const cargoLockRaw = fs.readFileSync(paths.cargoLock, "utf8");
-		const lockResult = updateCargoLock(cargoLockRaw, cargoResult.packageName, appName);
+		const lockResult = updateCargoLock(
+			cargoLockRaw,
+			cargoResult.packageName,
+			appName,
+		);
 		if (lockResult.updated) {
-			writeFile(paths.cargoLock, lockResult.content.endsWith("\n") ? lockResult.content : `${lockResult.content}\n`);
+			writeFile(
+				paths.cargoLock,
+				lockResult.content.endsWith("\n")
+					? lockResult.content
+					: `${lockResult.content}\n`,
+			);
 		}
 	}
 
 	console.log("Updated:");
-	updatedFiles.forEach((file) => console.log(`- ${file}`));
+	updatedFiles.forEach((file) => {
+		console.log(`- ${file}`);
+	});
 	console.log("Done!");
 } catch (error) {
 	console.error(error.message);

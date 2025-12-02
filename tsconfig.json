@@ -47,8 +47,11 @@
 		"lib/**/*.ts",
 		"hooks/**/*.ts",
 		"components/**/*.ts",
-		"styles/**/*.ts",
-		"constants/**/*.ts"
+		"styles/**/*.css",
+		"constants/**/*.ts",
+		"app/**/*.ts",
+		"next-env.d.ts",
+		"app/**/*.tsx"
 	],
 	"exclude": ["node_modules"]
 }
