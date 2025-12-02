@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { useWindowLock } from "@/hooks/useWindowLock";
 
+import { Logger } from "@/lib/services/Logger";
+
 export default function Home() {
 	const [greeting, setGreeting] = useState("");
 	const isLocked = useWindowLock();
@@ -20,10 +22,12 @@ export default function Home() {
 
 	const handleOpenAuxiliary = () => {
 		WindowManager.getInstance().openAuxiliaryWindow();
+		Logger.info("Opened auxiliary window", "HomePage");
 	};
 
 	const handleOpenChild = () => {
 		WindowManager.getInstance().openChildWindow();
+		Logger.info("Opened child window", "HomePage");
 	};
 
 	return (

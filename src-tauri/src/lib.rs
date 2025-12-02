@@ -1,4 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod logger;
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -38,7 +40,12 @@ fn system_beep() {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, system_beep])
+        .invoke_handler(tauri::generate_handler![
+            greet, 
+            system_beep,
+            logger::init_logger_cmd,
+            logger::log_frontend_message
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
