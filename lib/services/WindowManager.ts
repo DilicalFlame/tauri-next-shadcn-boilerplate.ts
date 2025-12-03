@@ -156,7 +156,7 @@ export class WindowManager {
         const currentWindow = getCurrentWindow();
         
         // Listen for close requests on THIS window
-        await currentWindow.onCloseRequested(async (event) => {
+        await currentWindow.onCloseRequested(async (_event) => {
             // If we are main, the setupMainWindowListener handles the heavy lifting of destroying aux windows.
             // But for ALL windows (including Main, Aux, Child), we need to ensure children are cleaned up from state.
             
