@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { useWindowLock } from "@/hooks/useWindowLock";
 
-import { Logger } from "@/lib/services/Logger";
+import { info } from "@/lib/services/Logger";
 
 export default function Home() {
 	const [greeting, setGreeting] = useState("");
@@ -27,16 +27,14 @@ export default function Home() {
 		WindowManager.getInstance().openAuxiliaryWindow("/", {
 			title: "Settings",
 			category: "settings"
-		});
-		Logger.info("Opened settings window", "HomePage");
+		}).then(_ => info("Opened settings window", "Home"));
 	};
 
 	const handleOpenChild = () => {
 		WindowManager.getInstance().openChildWindow("/", {
 			title: "Dialog",
 			category: "dialog"
-		});
-		Logger.info("Opened dialog window", "HomePage");
+		}).then(_ => info("Opened dialog window", "Home"));
 	};
 
 	return (
@@ -47,7 +45,8 @@ export default function Home() {
 					className="fixed inset-0 z-50 bg-transparent cursor-default"
 					onClick={() => {
 						const win = getCurrentWindow();
-						win.emit("request-shake", { windowLabel: win.label });
+						win.emit("request-shake", { windowLabel: win.label })
+							.then(_ => info("Emitted request-shake event", "Home"));
 					}}
 				/>
 			)}

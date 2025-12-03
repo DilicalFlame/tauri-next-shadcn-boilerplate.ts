@@ -7,7 +7,7 @@ export class LoggerService {
   private isDev = process.env.NODE_ENV === 'development';
 
   constructor() {
-    this.init();
+    void this.init();
   }
 
   private async init() {
@@ -119,4 +119,24 @@ export class LoggerService {
   }
 }
 
-export const Logger = new LoggerService();
+const Logger = new LoggerService();
+
+export function info(message: string, context?: string) {
+  void Logger.info(message, context);
+}
+
+export function warn(message: string, context?: string) {
+  void Logger.warn(message, context);
+}
+
+export function error(message: string, context?: string) {
+  void Logger.error(message, context);
+}
+
+export function debug(message: string, context?: string) {
+  void Logger.debug(message, context);
+}
+
+export function trace(message: string, context?: string) {
+  void Logger.trace(message, context);
+}
