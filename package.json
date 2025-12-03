@@ -9,7 +9,11 @@
 		"start": "next start",
 		"tauri": "tauri",
 		"lint": "biome check",
-		"format": "biome format --write && biome check --write"
+		"format": "biome format --write && biome check --write",
+		"docs:dev": "cd docs && pnpm dev",
+		"docs:build": "cd docs && pnpm build",
+		"docs:preview": "cd docs && pnpm preview",
+		"docs:gen-api": "cd docs && pnpm gen-api"
 	},
 	"dependencies": {
 		"@radix-ui/react-slot": "^1.2.4",

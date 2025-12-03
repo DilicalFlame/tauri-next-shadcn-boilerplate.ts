@@ -5,9 +5,9 @@ export interface LoggerSettings {
   /**
    * The path where to log.
    * If null or undefined, the default OS log directory will be used:
-   * - Windows: %APPDATA%\<bundle-identifier>\logs
-   * - Linux: ~/.local/share/<bundle-identifier>/logs
-   * - macOS: ~/Library/Logs/<bundle-identifier>
+   * - Windows: `%APPDATA%\<bundle-identifier>\logs`
+   * - Linux: `~/.local/share/<bundle-identifier>/logs`
+   * - macOS: `~/Library/Logs/<bundle-identifier>`
    */
   logPath?: string;
   

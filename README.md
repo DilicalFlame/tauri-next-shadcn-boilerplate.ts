@@ -29,6 +29,20 @@ That single command starts the Next.js dev server and launches the desktop shell
   - `pnpm tauri dev` — desktop dev loop
   - `pnpm tauri build` — production bundles
   - `pnpm lint` / `pnpm format` — Biome check + fix
+  - `pnpm docs:dev` — Start the documentation site locally
+
+## Documentation
+
+This project comes with a comprehensive documentation site built with Docusaurus.
+
+- **Manual**: Guides on architecture, services, and customization.
+- **API Reference**: Auto-generated documentation for the TypeScript codebase.
+
+To run the docs:
+
+```bash
+pnpm docs:dev
+```
 
 ## Customizing The App
 

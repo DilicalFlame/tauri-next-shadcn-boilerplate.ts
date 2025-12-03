@@ -2,7 +2,7 @@ import { WindowStateManager } from "./WindowStateManager";
 import { TauriService } from "./TauriService";
 import { emit } from "@tauri-apps/api/event";
 import { WebviewWindow, getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
-import { getCurrentWindow, PhysicalPosition, PhysicalSize, LogicalPosition, LogicalSize, Window } from "@tauri-apps/api/window";
+import { getCurrentWindow, PhysicalPosition, LogicalPosition, LogicalSize, Window } from "@tauri-apps/api/window";
 
 export interface WindowConfig {
     url?: string;

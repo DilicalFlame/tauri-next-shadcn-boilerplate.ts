@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { LOGGER_SETTINGS } from '@/constants/logger_settings';
 import StackTrace from 'stacktrace-js';
 
-class LoggerService {
+export class LoggerService {
   private initialized = false;
   private isDev = process.env.NODE_ENV === 'development';
 

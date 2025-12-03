@@ -1,0 +1,12 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["../lib", "../hooks", "../constants"],
+  "entryPointStrategy": "expand",
+  "out": "./api",
+  "plugin": ["typedoc-plugin-markdown"],
+  "hideBreadcrumbs": true,
+  "hidePageTitle": true,
+  "cleanOutputDir": true,
+  "readme": "none",
+  "tsconfig": "../tsconfig.json"
+}

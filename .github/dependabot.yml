@@ -12,3 +12,13 @@ updates:
       all-dependencies:
         patterns:
           - "*"
+
+  # Maintain dependencies for the documentation site
+  - package-ecosystem: "npm"
+    directory: "/docs"
+    schedule:
+      interval: "weekly"
+    groups:
+      docs-dependencies:
+        patterns:
+          - "*"
