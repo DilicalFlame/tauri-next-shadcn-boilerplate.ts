@@ -8,6 +8,9 @@ export default defineConfig({
   // Clean URLs (no .html)
   cleanUrls: true,
 
+  // Base URL for GitHub Pages
+  base: '/tauri-next-shadcn-boilerplate.ts/',
+
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     logo: '/logo.svg',
