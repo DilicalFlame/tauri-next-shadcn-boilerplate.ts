@@ -1,8 +1,8 @@
 import { WindowStateManager } from "./WindowStateManager";
 import { TauriService } from "./TauriService";
 import { emit } from "@tauri-apps/api/event";
-import { WebviewWindow, getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
-import { getCurrentWindow, PhysicalPosition, LogicalPosition, LogicalSize, Window } from "@tauri-apps/api/window";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWindow, PhysicalPosition, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
 
 export interface WindowConfig {
     url?: string;
@@ -37,6 +37,7 @@ export class WindowManager {
     private constructor() {
         // Private constructor for Singleton
         this.setupMainWindowListener();
+        this.setupLifecycleListener();
         this.initialize();
     }
 
@@ -45,9 +46,74 @@ export class WindowManager {
         try {
             const stateManager = WindowStateManager.getInstance();
             await stateManager.loadState();
+            stateManager.setWorkspace(this.currentScope);
             
+            // If we are the main window
             if (currentWindow.label === 'main') {
-                await this.restoreMainWindow(currentWindow, stateManager);
+                // Listen for tracking requests from other windows
+                // This ensures the main window (which persists) manages all state tracking
+                // Listen for state updates from other windows (Distributed Tracking)
+                await currentWindow.listen('window-state-update', async (event: any) => {
+                    const { type, payload } = event.payload;
+                    
+                    switch (type) {
+                        case 'update-preset':
+                            stateManager.updateCategoryPreset(payload.category, payload.preset);
+                            break;
+                        case 'register-window':
+                            stateManager.registerWindow(payload.label, payload.category, payload.type, payload.url);
+                            break;
+                        case 'remove-window':
+                            stateManager.removeWindow(payload.label);
+                            break;
+                    }
+                });
+
+                // Try to restore main window position from category preset
+                const mainPreset = stateManager.getCategoryPreset('main-window');
+                if (mainPreset) {
+                    try {
+                        await currentWindow.setPosition(new LogicalPosition(mainPreset.x, mainPreset.y));
+                        await currentWindow.setSize(new LogicalSize(mainPreset.width, mainPreset.height));
+                        if (mainPreset.maximized) {
+                            await currentWindow.maximize();
+                        }
+                    } catch (e) {
+                        console.error('Failed to restore main window state:', e);
+                    }
+                }
+                
+                // Start tracking main window
+                await stateManager.trackWindow(currentWindow, '/', 'main', 'main-window');
+                
+                // Restore active windows from session
+                const activeWindows = stateManager.getActiveWindows();
+                const restorePromises: Promise<void>[] = [];
+
+                for (const [label, info] of Object.entries(activeWindows)) {
+                    if (label === 'main') continue; // Main is already handled
+
+                    if (info.type === 'aux') {
+                        restorePromises.push(this.openAuxiliaryWindow(info.url, {
+                            label,
+                            category: info.category
+                        }));
+                    } else if (info.type === 'child') {
+                        restorePromises.push(this.openChildWindow(info.url, {
+                            label,
+                            category: info.category
+                        }));
+                    }
+                }
+                
+                await Promise.all(restorePromises);
+
+                // Prune any windows that failed to open or were skipped (e.g. extra child windows)
+                const validLabels = ['main'];
+                this.auxiliaryWindows.forEach(w => validLabels.push(w.label));
+                this.activeChildren.forEach(w => validLabels.push(w.label));
+                
+                stateManager.pruneInactiveWindows(validLabels);
             }
         } catch (e) {
             console.error('WindowManager initialization failed:', e);
@@ -59,63 +125,6 @@ export class WindowManager {
         }
     }
 
-    private async restoreMainWindow(currentWindow: Window, stateManager: WindowStateManager) {
-        const mainState = stateManager.getWindow(this.currentScope, 'main');
-        if (mainState) {
-            try {
-                await currentWindow.setPosition(new LogicalPosition(mainState.x, mainState.y));
-                await currentWindow.setSize(new LogicalSize(mainState.width, mainState.height));
-                if (mainState.maximized) {
-                    await currentWindow.maximize();
-                }
-            } catch (e) {
-                console.error('Failed to restore main window state:', e);
-            }
-        }
-        
-        stateManager.trackWindow(currentWindow, this.currentScope, '/', 'main', 'main-window');
-        
-        const allWindows = stateManager.getWindows(this.currentScope);
-        const restoredLabels: string[] = ['main'];
-        let childRestored = false;
-
-        for (const winState of allWindows) {
-            if (winState.label === 'main') continue;
-            
-            let restored = false;
-            if (winState.type === 'aux') {
-                await this.openAuxiliaryWindow(winState.url, {
-                    label: winState.label,
-                    x: winState.x,
-                    y: winState.y,
-                    width: winState.width,
-                    height: winState.height,
-                    maximized: winState.maximized,
-                    category: winState.category
-                });
-                restored = true;
-            } else if (winState.type === 'child' && !childRestored) {
-                childRestored = true;
-                await this.openChildWindow(winState.url, {
-                    label: winState.label,
-                    x: winState.x,
-                    y: winState.y,
-                    width: winState.width,
-                    height: winState.height,
-                    maximized: winState.maximized,
-                    category: winState.category
-                });
-                restored = true;
-            }
-            
-            if (restored) {
-                restoredLabels.push(winState.label);
-            }
-        }
-        
-        stateManager.pruneScope(this.currentScope, restoredLabels);
-    }
-
     private async setupMainWindowListener() {
         const currentWindow = getCurrentWindow();
         if (currentWindow.label === 'main') {
@@ -125,14 +134,15 @@ export class WindowManager {
                     return;
                 }
                 this.isClosing = true;
+                // Main window closing logic is special - it destroys everything
+                // We don't prevent default here immediately because we want to run cleanup
+                // But we need to keep the window alive until cleanup is done.
+                // Actually, the original code prevented default, did cleanup, then destroyed.
                 event.preventDefault();
 
                 try {
-                    const allWindows = await getAllWebviewWindows();
-                    const windowsToClose = allWindows.filter(w => w.label !== 'main');
-                    
-                    const closePromises = windowsToClose.map((win) =>
-                        win.destroy().catch((e) => console.error(`Failed to destroy window ${win.label}:`, e))
+                    const closePromises = this.auxiliaryWindows.map((win) =>
+                        win.destroy().catch((e) => console.error(`Failed to destroy aux window ${win.label}:`, e))
                     );
                     await Promise.all(closePromises);
                 } finally {
@@ -140,6 +150,44 @@ export class WindowManager {
                 }
             });
         }
+    }
+
+    private async setupLifecycleListener() {
+        const currentWindow = getCurrentWindow();
+        
+        // Listen for close requests on THIS window
+        await currentWindow.onCloseRequested(async (event) => {
+            // If we are main, the setupMainWindowListener handles the heavy lifting of destroying aux windows.
+            // But for ALL windows (including Main, Aux, Child), we need to ensure children are cleaned up from state.
+            
+            console.log(`Window ${currentWindow.label} close requested. Cleaning up children...`);
+
+            // 1. Clean up active children from state
+            // We iterate backwards to avoid issues if array changes (though we are just reading here)
+            for (const child of this.activeChildren) {
+                console.log(`Requesting cleanup for child: ${child.label}`);
+                
+                // Emit event to Main to remove this child from state
+                // We do this even if the child process is about to die, to ensure Main knows it's gone.
+                if (currentWindow.label !== 'main') {
+                     await emit('window-state-update', {
+                        type: 'remove-window',
+                        payload: { label: child.label }
+                    });
+                } else {
+                    // If we are main, we can call directly
+                    WindowStateManager.getInstance().removeWindow(child.label);
+                }
+            }
+            
+            // 2. Clean up SELF from state (if not main)
+            if (currentWindow.label !== 'main') {
+                 await emit('window-state-update', {
+                    type: 'remove-window',
+                    payload: { label: currentWindow.label }
+                });
+            }
+        });
     }
 
     private removeAuxiliaryWindow(window: WebviewWindow) {
@@ -239,10 +287,14 @@ export class WindowManager {
         });
     }
 
-    private mergeWindowConfig(options: Partial<WindowConfig> | undefined, defaultOptions: WindowConfig): WindowConfig {
+    public async openAuxiliaryWindow(path: string = "/", options?: Partial<WindowConfig>): Promise<void> {
+        // Use provided label (for restoration) or generate a fresh one
+        const label = options?.label || `aux-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        
+        // Check for category preset if category is provided
         let presetConfig: Partial<WindowConfig> = {};
         if (options?.category) {
-            const preset = WindowStateManager.getInstance().getPreset(options.category);
+            const preset = WindowStateManager.getInstance().getCategoryPreset(options.category);
             if (preset) {
                 presetConfig = {
                     width: preset.width,
@@ -253,12 +305,7 @@ export class WindowManager {
                 };
             }
         }
-        return { ...defaultOptions, ...presetConfig, ...options };
-    }
 
-    public async openAuxiliaryWindow(path: string = "/", options?: Partial<WindowConfig>): Promise<void> {
-        const label = options?.label || `aux-${Date.now()}`;
-        
         const defaultOptions: WindowConfig = {
             url: path,
             title: "Auxiliary Window",
@@ -269,7 +316,8 @@ export class WindowManager {
             visible: false,
         };
 
-        const fullConfig = this.mergeWindowConfig(options, defaultOptions);
+        // Priority: options > preset > default
+        const fullConfig = { ...defaultOptions, ...presetConfig, ...options };
         
         // Extract properties that are not part of WindowOptions to avoid errors
         // @ts-ignore - category is not in WindowOptions
@@ -286,7 +334,8 @@ export class WindowManager {
             }
 
             webview.show();
-            WindowStateManager.getInstance().trackWindow(webview, this.currentScope, path, 'aux', category);
+            const effectiveCategory = category || 'aux';
+            WindowStateManager.getInstance().trackWindow(webview, path, 'aux', effectiveCategory);
         });
 
         webview.once("tauri://error", (e) => {
@@ -297,7 +346,7 @@ export class WindowManager {
         webview.once("tauri://destroyed", () => {
             this.removeAuxiliaryWindow(webview);
             if (!this.isClosing) {
-                WindowStateManager.getInstance().removeWindow(this.currentScope, label);
+                WindowStateManager.getInstance().removeWindow(label);
             }
         });
     }
@@ -320,8 +369,24 @@ export class WindowManager {
         }
 
         // 2. Create the new child
+        // Use provided label (for restoration) or generate a fresh one
         const label = options?.label || `child-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         
+        // Check for category preset if category is provided
+        let presetConfig: Partial<WindowConfig> = {};
+        if (options?.category) {
+            const preset = WindowStateManager.getInstance().getCategoryPreset(options.category);
+            if (preset) {
+                presetConfig = {
+                    width: preset.width,
+                    height: preset.height,
+                    x: preset.x,
+                    y: preset.y,
+                    maximized: preset.maximized
+                };
+            }
+        }
+
         const defaultOptions: WindowConfig = {
             url: path,
             title: "Child Window",
@@ -335,7 +400,8 @@ export class WindowManager {
             visible: false,
         };
 
-        const fullConfig = this.mergeWindowConfig(options, defaultOptions);
+        // Priority: options > preset > default
+        const fullConfig = { ...defaultOptions, ...presetConfig, ...options };
         
         // If we are restoring position (from options or preset), disable centering
         if (fullConfig.x !== undefined && fullConfig.y !== undefined) {
@@ -363,7 +429,8 @@ export class WindowManager {
 
             webview.show();
             webview.setFocus();
-            WindowStateManager.getInstance().trackWindow(webview, this.currentScope, path, 'child', category);
+            const effectiveCategory = category || 'child';
+            WindowStateManager.getInstance().trackWindow(webview, path, 'child', effectiveCategory);
         });
 
         const cleanup = () => {
@@ -374,7 +441,7 @@ export class WindowManager {
 
             // Remove from state manager when closed
             if (!this.isClosing) {
-                WindowStateManager.getInstance().removeWindow(this.currentScope, label);
+                WindowStateManager.getInstance().removeWindow(label);
             }
 
             if (this.activeChildren.length === 0) {
