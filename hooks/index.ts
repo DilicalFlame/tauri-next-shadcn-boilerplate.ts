@@ -1,0 +1,1 @@
+export { useWindowLock } from "./useWindowLock";

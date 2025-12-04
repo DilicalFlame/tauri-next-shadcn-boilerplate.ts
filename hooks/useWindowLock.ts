@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useEffect, useState } from "react";
 
 export function useWindowLock() {
     const [isLocked, setIsLocked] = useState(false);
