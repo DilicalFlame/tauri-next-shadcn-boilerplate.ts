@@ -6,27 +6,14 @@ import {
     LogicalSize,
     PhysicalPosition,
 } from "@tauri-apps/api/window";
+import {
+    AUXILIARY_WINDOW_DEFAULT_HEIGHT,
+    AUXILIARY_WINDOW_DEFAULT_WIDTH,
+    CHILD_WINDOW_DEFAULT_HEIGHT,
+    CHILD_WINDOW_DEFAULT_WIDTH,
+} from "@/constants/window_settings";
 import { TauriService } from "./TauriService";
-import { WindowStateManager } from "./WindowStateManager";
-
-export interface WindowConfig {
-    url?: string;
-    title?: string;
-    width?: number;
-    height?: number;
-    resizable?: boolean;
-    decorations?: boolean;
-    visible?: boolean;
-    parent?: string;
-    skipTaskbar?: boolean;
-    center?: boolean;
-    minimizable?: boolean;
-    x?: number;
-    y?: number;
-    maximized?: boolean;
-    label?: string;
-    category?: string; // New field for window category
-}
+import { WindowStateService } from "./WindowStateService";
 
 export class WindowService {
     private static instance: WindowService;
@@ -49,7 +36,7 @@ export class WindowService {
     public async initialize() {
         const currentWindow = getCurrentWindow();
         try {
-            const stateManager = WindowStateManager.getInstance();
+            const stateManager = WindowStateService.getInstance();
             await stateManager.loadState();
             stateManager.setWorkspace(this.currentScope);
 
@@ -198,7 +185,7 @@ export class WindowService {
                     });
                 } else {
                     // If we are main, we can call directly
-                    WindowStateManager.getInstance().removeWindow(child.label);
+                    WindowStateService.getInstance().removeWindow(child.label);
                 }
             }
 
@@ -311,15 +298,15 @@ export class WindowService {
 
     public async openAuxiliaryWindow(
         path: string = "/",
-        options?: Partial<WindowConfig>,
+        options?: Partial<IWindowConfig>,
     ): Promise<void> {
         // Use provided label (for restoration) or generate a fresh one
         const label = options?.label || `aux-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
         // Check for category preset if category is provided
-        let presetConfig: Partial<WindowConfig> = {};
+        let presetConfig: Partial<IWindowConfig> = {};
         if (options?.category) {
-            const preset = WindowStateManager.getInstance().getCategoryPreset(options.category);
+            const preset = WindowStateService.getInstance().getCategoryPreset(options.category);
             if (preset) {
                 presetConfig = {
                     width: preset.width,
@@ -331,11 +318,11 @@ export class WindowService {
             }
         }
 
-        const defaultOptions: WindowConfig = {
+        const defaultOptions: Partial<IWindowConfig> = {
             url: path,
             title: "Auxiliary Window",
-            width: 800,
-            height: 600,
+            width: AUXILIARY_WINDOW_DEFAULT_WIDTH,
+            height: AUXILIARY_WINDOW_DEFAULT_HEIGHT,
             resizable: true,
             decorations: true,
             visible: false,
@@ -359,7 +346,7 @@ export class WindowService {
 
             webview.show();
             const effectiveCategory = category || "aux";
-            WindowStateManager.getInstance().trackWindow(webview, path, "aux", effectiveCategory);
+            WindowStateService.getInstance().trackWindow(webview, path, "aux", effectiveCategory);
         });
 
         webview.once("tauri://error", (e) => {
@@ -370,14 +357,14 @@ export class WindowService {
         webview.once("tauri://destroyed", () => {
             this.removeAuxiliaryWindow(webview);
             if (!this.isClosing) {
-                WindowStateManager.getInstance().removeWindow(label);
+                WindowStateService.getInstance().removeWindow(label);
             }
         });
     }
 
     public async openChildWindow(
         path: string = "/",
-        options?: Partial<WindowConfig>,
+        options?: Partial<IWindowConfig>,
     ): Promise<void> {
         const parentWindow = getCurrentWindow();
 
@@ -400,9 +387,9 @@ export class WindowService {
         const label = options?.label || `child-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
         // Check for category preset if category is provided
-        let presetConfig: Partial<WindowConfig> = {};
+        let presetConfig: Partial<IWindowConfig> = {};
         if (options?.category) {
-            const preset = WindowStateManager.getInstance().getCategoryPreset(options.category);
+            const preset = WindowStateService.getInstance().getCategoryPreset(options.category);
             if (preset) {
                 presetConfig = {
                     width: preset.width,
@@ -414,11 +401,11 @@ export class WindowService {
             }
         }
 
-        const defaultOptions: WindowConfig = {
+        const defaultOptions: Partial<IWindowConfig> = {
             url: path,
             title: "Child Window",
-            width: 600,
-            height: 400,
+            width: CHILD_WINDOW_DEFAULT_WIDTH,
+            height: CHILD_WINDOW_DEFAULT_HEIGHT,
             parent: parentWindow.label,
             skipTaskbar: true,
             center: true,
@@ -456,7 +443,7 @@ export class WindowService {
             webview.show();
             webview.setFocus();
             const effectiveCategory = category || "child";
-            WindowStateManager.getInstance().trackWindow(webview, path, "child", effectiveCategory);
+            WindowStateService.getInstance().trackWindow(webview, path, "child", effectiveCategory);
         });
 
         const cleanup = () => {
@@ -467,7 +454,7 @@ export class WindowService {
 
             // Remove from state manager when closed
             if (!this.isClosing) {
-                WindowStateManager.getInstance().removeWindow(label);
+                WindowStateService.getInstance().removeWindow(label);
             }
 
             if (this.activeChildren.length === 0) {

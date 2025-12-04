@@ -3,47 +3,22 @@ import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow, type Window } from "@tauri-apps/api/window";
 import { BaseDirectory, exists, mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
-export type WindowType = "main" | "aux" | "child";
+import { FILENAME_WINDOW_STATES } from "@/constants/window_settings.ts";
 
-export interface CategoryPreset {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    maximized: boolean;
-}
-
-export interface ActiveWindow {
-    category: string;
-    type: WindowType;
-    url: string;
-}
-
-export interface WorkspaceState {
-    active_windows: Record<string, ActiveWindow>; // label -> window info
-    category_presets: Record<string, CategoryPreset>; // category -> position/size
-}
-
-export interface AppState {
-    workspaces: Record<string, WorkspaceState>; // workspace_id -> workspace state
-}
-
-const STATE_FILENAME = "window-state.json";
-
-export class WindowStateManager {
-    private static instance: WindowStateManager;
-    private state: AppState = { workspaces: {} };
+export class WindowStateService {
+    private static instance: WindowStateService;
+    private state: IAppState = { workspaces: {} };
     private saveTimeout: NodeJS.Timeout | null = null;
     private trackedWindows: Map<string, () => void> = new Map(); // Map label to unlisten function
     private currentWorkspace: string = "default"; // Current workspace identifier
 
     private constructor() {}
 
-    public static getInstance(): WindowStateManager {
-        if (!WindowStateManager.instance) {
-            WindowStateManager.instance = new WindowStateManager();
+    public static getInstance(): WindowStateService {
+        if (!WindowStateService.instance) {
+            WindowStateService.instance = new WindowStateService();
         }
-        return WindowStateManager.instance;
+        return WindowStateService.instance;
     }
 
     public setWorkspace(workspaceId: string) {
@@ -52,7 +27,7 @@ export class WindowStateManager {
         if (!this.state.workspaces[workspaceId]) {
             this.state.workspaces[workspaceId] = {
                 active_windows: {},
-                category_presets: {},
+                states: {},
             };
         }
     }
@@ -61,13 +36,13 @@ export class WindowStateManager {
         return this.currentWorkspace;
     }
 
-    public async loadState(): Promise<AppState> {
+    public async loadState(): Promise<IAppState> {
         try {
-            const stateExists = await exists(STATE_FILENAME, {
+            const stateExists = await exists(FILENAME_WINDOW_STATES, {
                 baseDir: BaseDirectory.AppLocalData,
             });
             if (stateExists) {
-                const content = await readTextFile(STATE_FILENAME, {
+                const content = await readTextFile(FILENAME_WINDOW_STATES, {
                     baseDir: BaseDirectory.AppLocalData,
                 });
                 const loaded = JSON.parse(content);
@@ -82,7 +57,7 @@ export class WindowStateManager {
                         if (ws.active_windows && ws.category_presets) {
                             this.state.workspaces[wsId] = {
                                 active_windows: ws.active_windows || {},
-                                category_presets: ws.category_presets || {},
+                                states: ws.category_presets || {},
                             };
                         } else {
                             console.warn(`Workspace ${wsId} has invalid format, skipping`);
@@ -107,7 +82,7 @@ export class WindowStateManager {
         if (!this.state.workspaces[this.currentWorkspace]) {
             this.state.workspaces[this.currentWorkspace] = {
                 active_windows: {},
-                category_presets: {},
+                states: {},
             };
         }
 
@@ -122,7 +97,7 @@ export class WindowStateManager {
                     baseDir: BaseDirectory.AppLocalData,
                     recursive: true,
                 });
-                await writeTextFile(STATE_FILENAME, JSON.stringify(this.state, null, 2), {
+                await writeTextFile(FILENAME_WINDOW_STATES, JSON.stringify(this.state, null, 2), {
                     baseDir: BaseDirectory.AppLocalData,
                 });
                 console.log("Saved window state");
@@ -155,7 +130,7 @@ export class WindowStateManager {
     /**
      * Update category preset with new position/size
      */
-    public updateCategoryPreset(category: string, preset: CategoryPreset) {
+    public updateCategoryPreset(category: string, preset: ICategoryState) {
         const currentWindow = getCurrentWindow();
         if (currentWindow.label !== "main") {
             emit("window-state-update", {
@@ -168,7 +143,7 @@ export class WindowStateManager {
         const ws = this.state.workspaces[this.currentWorkspace];
         if (!ws) return;
 
-        ws.category_presets[category] = preset;
+        ws.states[category] = preset;
         console.log(`Updated preset for category '${category}':`, preset);
         this.saveState();
     }
@@ -203,15 +178,15 @@ export class WindowStateManager {
     /**
      * Get category preset for positioning
      */
-    public getCategoryPreset(category: string): CategoryPreset | undefined {
+    public getCategoryPreset(category: string): ICategoryState | undefined {
         const ws = this.state.workspaces[this.currentWorkspace];
-        return ws?.category_presets[category];
+        return ws?.states[category];
     }
 
     /**
      * Get all active windows in current workspace
      */
-    public getActiveWindows(): Record<string, ActiveWindow> {
+    public getActiveWindows(): Record<string, IActiveWindow> {
         const ws = this.state.workspaces[this.currentWorkspace];
         return ws?.active_windows || {};
     }

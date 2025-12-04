@@ -1,0 +1,5 @@
+export const FILENAME_WINDOW_STATES = "window_state.json";
+export const AUXILIARY_WINDOW_DEFAULT_WIDTH = 800;
+export const AUXILIARY_WINDOW_DEFAULT_HEIGHT = 600;
+export const CHILD_WINDOW_DEFAULT_WIDTH = 600;
+export const CHILD_WINDOW_DEFAULT_HEIGHT = 600;
